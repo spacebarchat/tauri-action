@@ -1,5 +1,9 @@
 # Changelog
 
+## \[0.5.1]
+
+- [`f2abe36`](https://www.github.com/tauri-apps/tauri-action/commit/f2abe36fa8a59765d670b75f823b2ed3e93b40ab)([#711](https://www.github.com/tauri-apps/tauri-action/pull/711)) tauri-action can now successfully build binaries even if they don't have any artifacts (`bundle.active: false`)
+
 ## \[0.5.0]
 
 - [`d618a42`](https://www.github.com/tauri-apps/tauri-action/commit/d618a422b9e0fbca4fd2436be4f6368453c45a7e)([#645](https://www.github.com/tauri-apps/tauri-action/pull/645)) The action added `appVersion` parameter to facilitate easy access to the current application version in action output.
