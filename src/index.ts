@@ -52,12 +52,14 @@ async function run(): Promise<void> {
     const updaterJsonPreferNsis =
       core.getInput('updaterJsonPreferNsis')?.toLowerCase() === 'true';
 
+    // If releaseId is set we'll use this to upload the assets to.
+    // If tagName is set we also require releaseName to create a new release.
+    // If neither releaseId nor tagName are set we won't try to upload anything at the end.
     if (!releaseId) {
-      if (Boolean(tagName) !== Boolean(releaseName)) {
+      if (Boolean(tagName) && !releaseName)
         throw new Error(
-          '`tagName` is required along with `releaseName` when creating a release.',
+          '`releaseName` is required if `tagName` is set when creating a release.',
         );
-      }
     }
 
     const buildOptions: BuildOptions = {
@@ -99,7 +101,14 @@ async function run(): Promise<void> {
     const artifacts = releaseArtifacts.concat(debugArtifacts);
 
     if (artifacts.length === 0) {
-      throw new Error('No artifacts were found.');
+      if (releaseId || tagName || releaseName) {
+        throw new Error('No artifacts were found.');
+      } else {
+        console.log(
+          'Found no artifacts. Uploading the artifacts was not requested, so we are done.',
+        );
+        return;
+      }
     }
 
     console.log(`Found artifacts:\n${artifacts.map((a) => a.path).join('\n')}`);
@@ -110,6 +119,37 @@ async function run(): Promise<void> {
 
     const targetInfo = getTargetInfo(targetPath);
     const info = getInfo(projectPath, targetInfo, configArg);
+    core.setOutput('appVersion', info.version);
+
+    // Other steps may benfit from this so we do this whether or not we want to upload it.
+    if (targetInfo.platform === 'macos') {
+      let i = 0;
+      for (const artifact of artifacts) {
+        // updater provide a .tar.gz, this will prevent duplicate and overwriting of
+        // signed archive
+        if (
+          artifact.path.endsWith('.app') &&
+          !existsSync(`${artifact.path}.tar.gz`)
+        ) {
+          console.log(
+            `Packaging ${artifact.path} directory into ${artifact.path}.tar.gz`,
+          );
+
+          await execCommand('tar', [
+            'czf',
+            `${artifact.path}.tar.gz`,
+            '-C',
+            dirname(artifact.path),
+            basename(artifact.path),
+          ]);
+          artifact.path += '.tar.gz';
+        } else if (artifact.path.endsWith('.app')) {
+          // we can't upload a directory
+          artifacts.splice(i, 1);
+        }
+        i++;
+      }
+    }
 
     if (tagName && !releaseId) {
       const templates = [
@@ -152,7 +192,6 @@ async function run(): Promise<void> {
       core.setOutput('releaseUploadUrl', releaseData.uploadUrl);
       core.setOutput('releaseId', releaseData.id.toString());
       core.setOutput('releaseHtmlUrl', releaseData.htmlUrl);
-      core.setOutput('appVersion', info.version);
     }
 
     if (releaseId) {
@@ -219,6 +258,8 @@ async function run(): Promise<void> {
           updaterJsonKeepUniversal,
         });
       }
+    } else {
+      console.log('No releaseId or tagName provided, skipping all uploads...');
     }
   } catch (error) {
     // @ts-ignore
